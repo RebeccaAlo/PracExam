@@ -2,7 +2,8 @@ using TMPro;
 using UnityEngine;
 
 /// <summary>
-/// Manages player score, updates HUD display, and prevents score from becoming negative.
+/// Manages player score, updates HUD display, prevents negative scores,
+/// and checks for the 10,000 point win condition in real time.
 /// </summary>
 public class ScoreManager : MonoBehaviour
 {
@@ -40,13 +41,31 @@ public class ScoreManager : MonoBehaviour
         UpdateUI();
     }
 
+    private void OnDestroy()
+    {
+        if (Instance == this)
+        {
+            Instance = null;
+        }
+    }
+
     /// <summary>
-    /// Adds points to the player's score and updates the UI immediately.
+    /// Adds points to the player's score and checks for the win condition (>= 10,000).
     /// </summary>
     public void AddScore(int amount)
     {
         currentScore += Mathf.Max(0, amount);
         UpdateUI();
+
+        // Check if the player reaches or exceeds 10,000 points to trigger WIN immediately
+        var levelMgr = GameOverManager.Instance ?? Object.FindAnyObjectByType<GameOverManager>();
+        if (levelMgr != null && levelMgr.CurrentState == LevelState.Playing)
+        {
+            if (currentScore >= levelMgr.TargetWinScore)
+            {
+                levelMgr.TriggerWin();
+            }
+        }
     }
 
     /// <summary>

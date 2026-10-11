@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Reflection;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 #if ENABLE_INPUT_SYSTEM
@@ -7,40 +8,69 @@ using UnityEngine.InputSystem;
 #endif
 
 /// <summary>
-/// Controls the Game Over screen, input disabling, and seamless player restart.
-/// Handles Rigidbody physics resets, position/rotation restoration, interpolation safety,
-/// and synchronizes with GameTimer and ScoreManager without reloading the entire scene.
+/// Possible states for the level lifecycle.
+/// </summary>
+public enum LevelState
+{
+    Playing,
+    Won,
+    Lost
+}
+
+/// <summary>
+/// Controls level state (Playing, Won, Lost), result screens (WIN & GAME OVER),
+/// input toggling, player teleportation/restart, and Rigidbody physics restoration.
+/// Acts as the single source of truth for level ending conditions.
 /// </summary>
 public class GameOverManager : MonoBehaviour
 {
     public static GameOverManager Instance { get; private set; }
 
-    [Header("UI References")]
-    [Tooltip("The root UI GameObject/Panel of the Game Over screen.")]
+    [Header("Level State & Rules")]
+    [Tooltip("Current lifecycle state of the level.")]
+    [SerializeField] private LevelState currentState = LevelState.Playing;
+
+    [Tooltip("Target score required to trigger victory.")]
+    [SerializeField] private int targetWinScore = 10000;
+
+    [Header("UI Result Panels")]
+    [Tooltip("Root GameObject of the Game Over panel.")]
     [SerializeField] private GameObject gameOverPanel;
 
-    [Tooltip("The UI Button that restarts gameplay when clicked.")]
-    [SerializeField] private Button restartButton;
+    [Tooltip("Root GameObject of the Win panel.")]
+    [SerializeField] private GameObject winPanel;
+
+    [Tooltip("Final score text displayed on the Game Over panel.")]
+    [SerializeField] private TMP_Text gameOverScoreText;
+
+    [Tooltip("Final score text displayed on the Win panel.")]
+    [SerializeField] private TMP_Text winScoreText;
+
+    [Tooltip("Restart button on the Game Over panel.")]
+    [SerializeField] private Button gameOverRestartButton;
+
+    [Tooltip("Restart button on the Win panel.")]
+    [SerializeField] private Button winRestartButton;
 
     [Header("Player Target")]
-    [Tooltip("The player GameObject. If unassigned, will automatically find object tagged 'Player'.")]
+    [Tooltip("The player GameObject. If unassigned, automatically finds object tagged 'Player'.")]
     [SerializeField] private GameObject player;
 
-    [Tooltip("The player's Rigidbody. If unassigned, will be retrieved from the player object.")]
+    [Tooltip("The player's Rigidbody. If unassigned, automatically retrieved from the player object.")]
     [SerializeField] private Rigidbody playerRigidbody;
 
     [Tooltip("The PlayerFallDetector on the player.")]
     [SerializeField] private PlayerFallDetector fallDetector;
 
     [Header("Movement & Input Handling")]
-    [Tooltip("Specific movement or input components to disable during Game Over.")]
+    [Tooltip("Specific movement or input components to disable when the level ends.")]
     [SerializeField] private Behaviour[] movementComponentsToDisable;
 
-    [Tooltip("Automatically detect and disable movement/input components on the player during Game Over.")]
+    [Tooltip("Automatically detect and disable movement/input components on the player when level ends.")]
     [SerializeField] private bool autoDetectMovementComponents = true;
 
     [Header("Cursor Settings")]
-    [Tooltip("If true, unlocks cursor during Game Over and re-locks upon restart.")]
+    [Tooltip("If true, unlocks cursor when level ends and re-locks upon restart.")]
     [SerializeField] private bool manageCursor = true;
 
     [Tooltip("If true, locks cursor back to center when game restarts.")]
@@ -53,18 +83,23 @@ public class GameOverManager : MonoBehaviour
     [Tooltip("Initial spawn rotation.")]
     [SerializeField] private Quaternion initialRotation = Quaternion.identity;
 
-    // Cached Rigidbody settings
     private RigidbodyInterpolation originalInterpolation = RigidbodyInterpolation.None;
     private RigidbodyConstraints originalConstraints = RigidbodyConstraints.None;
     private bool originalIsKinematic = false;
 
-    // State
-    private bool isGameOver = false;
     private System.Collections.Generic.List<Behaviour> detectedMovementComponents = new System.Collections.Generic.List<Behaviour>();
 
-    public bool IsGameOver => isGameOver;
+    public LevelState CurrentState => currentState;
+    public int TargetWinScore => targetWinScore;
+    public bool IsGameOver => currentState != LevelState.Playing;
     public Vector3 InitialPosition => initialPosition;
     public Quaternion InitialRotation => initialRotation;
+    public GameObject GameOverPanel => gameOverPanel;
+    public GameObject WinPanel => winPanel;
+    public TMP_Text GameOverScoreText => gameOverScoreText;
+    public TMP_Text WinScoreText => winScoreText;
+    public Button GameOverRestartButton => gameOverRestartButton;
+    public Button WinRestartButton => winRestartButton;
 
     private void Awake()
     {
@@ -80,9 +115,38 @@ public class GameOverManager : MonoBehaviour
         SetupUI();
     }
 
+    private void OnDestroy()
+    {
+        if (Instance == this)
+        {
+            Instance = null;
+        }
+    }
+
+    /// <summary>
+    /// Loads the Main Menu scene safely, restoring cursor and timeScale.
+    /// </summary>
+    public void ReturnToMainMenu()
+    {
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
+        Time.timeScale = 1f;
+        UnityEngine.SceneManagement.SceneManager.LoadScene("MainMenu");
+    }
+
+    /// <summary>
+    /// Loads the Stage Selection scene safely, restoring cursor and timeScale.
+    /// </summary>
+    public void ReturnToStageSelection()
+    {
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
+        Time.timeScale = 1f;
+        UnityEngine.SceneManagement.SceneManager.LoadScene("StageSelection");
+    }
+
     private void Start()
     {
-        // Re-confirm initial position on Start after all objects are positioned
         if (player != null && initialPosition == Vector3.zero && player.transform.position != Vector3.zero)
         {
             initialPosition = player.transform.position;
@@ -90,9 +154,6 @@ public class GameOverManager : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// Finds and links player components if unassigned in Inspector.
-    /// </summary>
     private void InitializePlayerReferences()
     {
         if (player == null)
@@ -123,9 +184,6 @@ public class GameOverManager : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// Detects movement and input components on the player to safely toggle on Game Over.
-    /// </summary>
     private void CacheMovementComponents()
     {
         if (!autoDetectMovementComponents || player == null) return;
@@ -139,7 +197,6 @@ public class GameOverManager : MonoBehaviour
 
             string typeName = comp.GetType().Name.ToLower();
 
-            // Match common movement and input component types
             if (typeName.Contains("movement") ||
                 typeName.Contains("controller") ||
                 typeName.Contains("motor") ||
@@ -154,9 +211,6 @@ public class GameOverManager : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// Stores the player's initial position, rotation, and Rigidbody configuration.
-    /// </summary>
     private void CacheInitialState()
     {
         if (player != null)
@@ -173,71 +227,145 @@ public class GameOverManager : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// Initializes UI panel and hooks up the restart button.
-    /// </summary>
     private void SetupUI()
     {
-        if (gameOverPanel != null)
+        // Hide both result panels at start
+        if (gameOverPanel != null) gameOverPanel.SetActive(false);
+        if (winPanel != null) winPanel.SetActive(false);
+
+        // Hook up restart buttons
+        if (gameOverRestartButton != null)
         {
-            gameOverPanel.SetActive(false);
+            gameOverRestartButton.onClick.RemoveListener(RestartGame);
+            gameOverRestartButton.onClick.AddListener(RestartGame);
         }
 
-        if (restartButton != null)
+        if (winRestartButton != null)
         {
-            restartButton.onClick.RemoveListener(RestartGame);
-            restartButton.onClick.AddListener(RestartGame);
+            winRestartButton.onClick.RemoveListener(RestartGame);
+            winRestartButton.onClick.AddListener(RestartGame);
         }
     }
 
     /// <summary>
-    /// Triggers the Game Over sequence: displays UI, freezes player physics, stops timer, and disables input.
+    /// Evaluates outcome when the countdown reaches zero.
+    /// Wins if score >= 10,000; loses if score < 10,000.
     /// </summary>
-    public void TriggerGameOver()
+    public void OnTimerExpired()
     {
-        // Prevent duplicate Game Over executions
-        if (isGameOver) return;
-        isGameOver = true;
+        if (currentState != LevelState.Playing) return;
 
-        Debug.Log("[GameOverManager] Game Over triggered!");
+        int finalScore = ScoreManager.Instance != null ? ScoreManager.Instance.CurrentScore : 0;
+        if (finalScore >= targetWinScore)
+        {
+            TriggerWin();
+        }
+        else
+        {
+            TriggerGameOver();
+        }
+    }
 
-        // 1. Stop countdown timer immediately
+    /// <summary>
+    /// Triggers the Win state: displays WIN screen, updates final score, halts timer, and disables input.
+    /// Can only be activated once while in the Playing state.
+    /// </summary>
+    public void TriggerWin()
+    {
+        if (currentState != LevelState.Playing) return;
+        currentState = LevelState.Won;
+
+        Debug.Log("[GameOverManager] WIN state triggered!");
+
+        // 1. Stop timer
         var timer = GameTimer.Instance ?? Object.FindAnyObjectByType<GameTimer>();
         if (timer != null)
         {
             timer.StopTimer();
         }
 
-        // 2. Show Game Over UI
-        if (gameOverPanel != null)
+        // 2. Hide Game Over panel, show WIN panel
+        if (gameOverPanel != null) gameOverPanel.SetActive(false);
+        if (winPanel != null) winPanel.SetActive(true);
+
+        // 3. Display final score
+        int finalScore = ScoreManager.Instance != null ? ScoreManager.Instance.CurrentScore : 0;
+        if (winScoreText != null)
         {
-            gameOverPanel.SetActive(true);
+            winScoreText.text = $"Final Score: {finalScore}";
         }
 
-        // 3. Unlock mouse cursor so the player can interact with the Restart button
+        // 4. Unlock cursor for UI
         if (manageCursor)
         {
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
         }
 
-        // 4. Freeze Rigidbody to prevent infinite downward fall while screen is open
+        // 5. Freeze Rigidbody
         if (playerRigidbody != null)
         {
             ZeroRigidbodyVelocity(playerRigidbody);
             playerRigidbody.isKinematic = true;
         }
 
-        // 5. Disable player movement and inputs
+        // 6. Disable movement and input
         SetPlayerMovementEnabled(false);
     }
 
     /// <summary>
-    /// Restarts the player and resets the game state without reloading the scene.
+    /// Triggers the Loss state: displays GAME OVER screen, halts timer, freezes player, and disables input.
+    /// Can only be activated once while in the Playing state.
+    /// </summary>
+    public void TriggerGameOver()
+    {
+        if (currentState != LevelState.Playing) return;
+        currentState = LevelState.Lost;
+
+        Debug.Log("[GameOverManager] GAME OVER state triggered!");
+
+        // 1. Stop timer
+        var timer = GameTimer.Instance ?? Object.FindAnyObjectByType<GameTimer>();
+        if (timer != null)
+        {
+            timer.StopTimer();
+        }
+
+        // 2. Hide WIN panel, show Game Over panel
+        if (winPanel != null) winPanel.SetActive(false);
+        if (gameOverPanel != null) gameOverPanel.SetActive(true);
+
+        // 3. Display final score if supported
+        int finalScore = ScoreManager.Instance != null ? ScoreManager.Instance.CurrentScore : 0;
+        if (gameOverScoreText != null)
+        {
+            gameOverScoreText.text = $"Final Score: {finalScore}";
+        }
+
+        // 4. Unlock cursor for UI
+        if (manageCursor)
+        {
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
+        }
+
+        // 5. Freeze Rigidbody
+        if (playerRigidbody != null)
+        {
+            ZeroRigidbodyVelocity(playerRigidbody);
+            playerRigidbody.isKinematic = true;
+        }
+
+        // 6. Disable movement and input
+        SetPlayerMovementEnabled(false);
+    }
+
+    /// <summary>
+    /// Restarts the level: resets physics, teleports player, resets timer and score, and returns to Playing state.
     /// </summary>
     public void RestartGame()
     {
-        Debug.Log("[GameOverManager] Restarting game...");
+        Debug.Log("[GameOverManager] Restarting level...");
 
         // 1. Reset Rigidbody physics before restoring movement
         ResetRigidbodyPhysics();
@@ -264,14 +392,14 @@ public class GameOverManager : MonoBehaviour
             fallDetector.ResetFallDetector();
         }
 
-        // 7. Reset and restart timer
+        // 7. Reset and restart timer (30s)
         var timer = GameTimer.Instance ?? Object.FindAnyObjectByType<GameTimer>();
         if (timer != null)
         {
             timer.ResetTimer();
         }
 
-        // 8. Reset score
+        // 8. Reset score to initial
         var score = ScoreManager.Instance ?? Object.FindAnyObjectByType<ScoreManager>();
         if (score != null)
         {
@@ -285,53 +413,38 @@ public class GameOverManager : MonoBehaviour
             statsManager.ResetStats();
         }
 
-        // 10. Hide Game Over screen and reset Game Over flag
-        if (gameOverPanel != null)
-        {
-            gameOverPanel.SetActive(false);
-        }
+        // 10. Hide both result panels
+        if (gameOverPanel != null) gameOverPanel.SetActive(false);
+        if (winPanel != null) winPanel.SetActive(false);
 
-        isGameOver = false;
+        // 11. Restore Playing state
+        currentState = LevelState.Playing;
     }
 
-    /// <summary>
-    /// Safely resets Rigidbody physics: zeroes velocity, restores constraints,
-    /// and handles interpolation to eliminate visual teleportation glitches.
-    /// </summary>
     private void ResetRigidbodyPhysics()
     {
         if (playerRigidbody == null) return;
 
-        // Temporarily turn off interpolation so physics doesn't interpolate across the teleport distance
         playerRigidbody.interpolation = RigidbodyInterpolation.None;
-
-        // Restore original kinematic state and constraints
         playerRigidbody.isKinematic = originalIsKinematic;
         playerRigidbody.constraints = originalConstraints;
 
-        // Reset position and rotation via Rigidbody API
         Quaternion targetRot = GetValidRotation(initialRotation);
         playerRigidbody.position = initialPosition;
         playerRigidbody.rotation = targetRot;
 
-        // Set velocity and angular velocity to zero
         ZeroRigidbodyVelocity(playerRigidbody);
 
-        // Safely restore interpolation on next fixed update to prevent any visual stretching
         if (originalInterpolation != RigidbodyInterpolation.None)
         {
             StartCoroutine(RestoreInterpolationRoutine(playerRigidbody, originalInterpolation));
         }
     }
 
-    /// <summary>
-    /// Restores transform position and rotation, handling CharacterController if present.
-    /// </summary>
     private void ResetPlayerTransform()
     {
         if (player == null) return;
 
-        // Temporarily disable CharacterController during teleport to prevent position conflicts
         bool ccWasEnabled = false;
         if (player.TryGetComponent<CharacterController>(out var cc))
         {
@@ -343,7 +456,6 @@ public class GameOverManager : MonoBehaviour
         player.transform.position = initialPosition;
         player.transform.rotation = targetRot;
 
-        // Force immediate synchronization of physics transforms
         Physics.SyncTransforms();
 
         if (cc != null && ccWasEnabled)
@@ -351,16 +463,12 @@ public class GameOverManager : MonoBehaviour
             cc.enabled = true;
         }
 
-        // Confirm Rigidbody velocities remain zero after transform sync
         if (playerRigidbody != null)
         {
             ZeroRigidbodyVelocity(playerRigidbody);
         }
     }
 
-    /// <summary>
-    /// Waits until the next physics step before reenabling interpolation to guarantee no visual glitch.
-    /// </summary>
     private IEnumerator RestoreInterpolationRoutine(Rigidbody rb, RigidbodyInterpolation targetInterpolation)
     {
         yield return new WaitForFixedUpdate();
@@ -370,9 +478,6 @@ public class GameOverManager : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// Zeroes both linear velocity and angular velocity on a Rigidbody across Unity versions.
-    /// </summary>
     private void ZeroRigidbodyVelocity(Rigidbody rb)
     {
         if (rb == null || rb.isKinematic) return;
@@ -385,9 +490,6 @@ public class GameOverManager : MonoBehaviour
         rb.angularVelocity = Vector3.zero;
     }
 
-    /// <summary>
-    /// Validates that the quaternion is non-zero and properly normalized before setting physics rotation.
-    /// </summary>
     private Quaternion GetValidRotation(Quaternion rot)
     {
         float sqr = rot.x * rot.x + rot.y * rot.y + rot.z * rot.z + rot.w * rot.w;
@@ -395,40 +497,27 @@ public class GameOverManager : MonoBehaviour
         return rot.normalized;
     }
 
-    /// <summary>
-    /// Enables or disables movement and input components.
-    /// </summary>
     private void SetPlayerMovementEnabled(bool enable)
     {
-        // 1. User-assigned components in Inspector
         if (movementComponentsToDisable != null)
         {
             foreach (var comp in movementComponentsToDisable)
             {
-                if (comp != null)
-                {
-                    comp.enabled = enable;
-                }
+                if (comp != null) comp.enabled = enable;
             }
         }
 
-        // 2. Auto-detected movement components
         foreach (var comp in detectedMovementComponents)
         {
-            if (comp != null)
-            {
-                comp.enabled = enable;
-            }
+            if (comp != null) comp.enabled = enable;
         }
 
-        // 3. Built-in CharacterController toggle
         if (player != null && player.TryGetComponent<CharacterController>(out var cc))
         {
             cc.enabled = enable;
         }
 
 #if ENABLE_INPUT_SYSTEM
-        // 4. Unity Input System PlayerInput toggle
         if (player != null && player.TryGetComponent<PlayerInput>(out var playerInput))
         {
             playerInput.enabled = enable;
@@ -436,14 +525,10 @@ public class GameOverManager : MonoBehaviour
 #endif
     }
 
-    /// <summary>
-    /// Clears any accumulated velocity, jump cooldown, or input buffers.
-    /// </summary>
     private void ClearAccumulatedMovementState()
     {
         if (player == null) return;
 
-        // Reset StarterAssets inputs (move, jump, sprint) if present
         var inputsComp = player.GetComponent("StarterAssetsInputs");
         if (inputsComp != null)
         {
@@ -452,7 +537,6 @@ public class GameOverManager : MonoBehaviour
             SetReflectedField(inputsComp, "sprint", false);
         }
 
-        // Reset controller internal velocity fields if present
         var controllerComp = player.GetComponent("ThirdPersonController");
         if (controllerComp != null)
         {
@@ -463,16 +547,18 @@ public class GameOverManager : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// Helper to safely set private/public fields via reflection without hard assembly references.
-    /// </summary>
     private void SetReflectedField(object target, string fieldName, object value)
     {
         if (target == null) return;
         var field = target.GetType().GetField(fieldName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-        if (field != null)
-        {
-            field.SetValue(target, value);
-        }
+        if (field != null) field.SetValue(target, value);
     }
+}
+
+/// <summary>
+/// Alias for GameOverManager to support LevelManager references cleanly.
+/// </summary>
+public class LevelManager : MonoBehaviour
+{
+    public static GameOverManager Instance => GameOverManager.Instance;
 }

@@ -2,19 +2,19 @@ using TMPro;
 using UnityEngine;
 
 /// <summary>
-/// Controls the countdown game timer, updates the HUD display, and triggers Game Over when time expires.
-/// Prevents the timer from becoming negative and halts countdown while Game Over is active.
+/// Controls the 30-second level countdown timer, updates the HUD display,
+/// and delegates outcome resolution to GameOverManager when time expires.
 /// </summary>
 public class GameTimer : MonoBehaviour
 {
     public static GameTimer Instance { get; private set; }
 
     [Header("Timer Settings")]
-    [Tooltip("Starting countdown time in seconds.")]
-    [SerializeField] private float initialTime = 60f;
+    [Tooltip("Starting countdown time in seconds (30 seconds per level specification).")]
+    [SerializeField] private float initialTime = 30f;
 
     [Tooltip("Current remaining time in seconds.")]
-    [SerializeField] private float remainingTime = 60f;
+    [SerializeField] private float remainingTime = 30f;
 
     [Tooltip("Whether the timer is actively counting down.")]
     [SerializeField] private bool isTimerRunning = true;
@@ -43,7 +43,6 @@ public class GameTimer : MonoBehaviour
 
     private void Start()
     {
-        // Ensure timeScale is not left paused from a previous state
         if (Time.timeScale <= 0f)
         {
             Time.timeScale = 1f;
@@ -51,9 +50,24 @@ public class GameTimer : MonoBehaviour
         UpdateUI();
     }
 
+    private void OnDestroy()
+    {
+        if (Instance == this)
+        {
+            Instance = null;
+        }
+    }
+
     private void Update()
     {
         if (!isTimerRunning) return;
+
+        // Ensure timer doesn't run if level has already ended
+        if (GameOverManager.Instance != null && GameOverManager.Instance.CurrentState != LevelState.Playing)
+        {
+            isTimerRunning = false;
+            return;
+        }
 
         if (remainingTime > 0f)
         {
@@ -72,16 +86,20 @@ public class GameTimer : MonoBehaviour
     /// </summary>
     public void AddTime(float seconds)
     {
+        if (GameOverManager.Instance != null && GameOverManager.Instance.CurrentState != LevelState.Playing) return;
+
         remainingTime += Mathf.Max(0f, seconds);
         UpdateUI();
     }
 
     /// <summary>
     /// Subtracts seconds from the remaining game time, clamping at zero to prevent negative time.
-    /// Triggers Game Over if the time reaches zero.
+    /// Triggers outcome check if the time reaches zero.
     /// </summary>
     public void SubtractTime(float seconds)
     {
+        if (GameOverManager.Instance != null && GameOverManager.Instance.CurrentState != LevelState.Playing) return;
+
         remainingTime = Mathf.Max(0f, remainingTime - seconds);
         UpdateUI();
 
@@ -100,7 +118,7 @@ public class GameTimer : MonoBehaviour
     }
 
     /// <summary>
-    /// Pauses the countdown (e.g., during Game Over screen).
+    /// Pauses the countdown (e.g., when the level ends).
     /// </summary>
     public void StopTimer()
     {
@@ -108,7 +126,7 @@ public class GameTimer : MonoBehaviour
     }
 
     /// <summary>
-    /// Resets the remaining time back to initialTime and restarts the countdown.
+    /// Resets the remaining time back to initialTime (30 seconds) and restarts countdown.
     /// </summary>
     public void ResetTimer()
     {
@@ -118,17 +136,17 @@ public class GameTimer : MonoBehaviour
     }
 
     /// <summary>
-    /// Invoked when the timer reaches 0. Stops countdown and notifies GameOverManager.
+    /// Invoked when the timer reaches 0. Stops countdown and notifies GameOverManager to evaluate outcome.
     /// </summary>
     private void OnTimeExpired()
     {
         isTimerRunning = false;
-        Debug.Log("[GameTimer] Time has run out! Triggering Game Over.");
+        Debug.Log("[GameTimer] Level countdown reached 0! Evaluating level outcome.");
 
         var gameOverManager = GameOverManager.Instance ?? Object.FindAnyObjectByType<GameOverManager>();
-        if (gameOverManager != null && !gameOverManager.IsGameOver)
+        if (gameOverManager != null)
         {
-            gameOverManager.TriggerGameOver();
+            gameOverManager.OnTimerExpired();
         }
     }
 
@@ -139,9 +157,8 @@ public class GameTimer : MonoBehaviour
     {
         if (timerText != null)
         {
-            int minutes = Mathf.FloorToInt(remainingTime / 60f);
-            int seconds = Mathf.FloorToInt(remainingTime % 60f);
-            timerText.text = $"Time: {minutes:00}:{seconds:00}";
+            int seconds = Mathf.CeilToInt(remainingTime);
+            timerText.text = $"Time: {seconds}s";
         }
     }
 }

@@ -6,8 +6,17 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
-    path: Assets/Scenes/SampleScene.unity
-    guid: 99c9720ab356a0642a771bea13969a05
+    path: Assets/Scenes/MainMenu.unity
+    guid: e8d92994f1436db4c85f3208e4689d80
+  - enabled: 1
+    path: Assets/Scenes/StageSelection.unity
+    guid: ef1a50d0aa4e8e449a3dd37e02bc3d0a
+  - enabled: 1
+    path: Assets/Starter Assets/Sample/ThirdPersonController/Playground.unity
+    guid: e9017d5f96b9f09489b4b37e1d6eb914
+  - enabled: 1
+    path: Assets/Starter Assets/Sample/ThirdPersonController/Playground 2.unity
+    guid: 7e6fc6eea80632b459ee3a1abd770fd0
   m_configObjects:
     com.unity.dt.app-ui: {fileID: 11400000, guid: 1b1c20d82303e4b5781c3ef50ac1449f, type: 2}
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}

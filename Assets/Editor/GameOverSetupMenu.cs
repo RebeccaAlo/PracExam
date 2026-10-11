@@ -41,7 +41,7 @@ public static class GameOverSetupMenu
             var cc = player.GetComponent<CharacterController>();
             if (cc != null)
             {
-                rb.isKinematic = true; // Kinematic prevents conflict with CharacterController
+                rb.isKinematic = true;
             }
             else
             {
@@ -64,7 +64,7 @@ public static class GameOverSetupMenu
             Undo.RegisterCreatedObjectUndo(eventSystemGo, "Create EventSystem");
         }
 
-        // 4. Create or Locate Canvas
+        // 4. Create or Locate GameOverCanvas
         GameObject canvasGo = GameObject.Find("GameOverCanvas");
         if (canvasGo == null)
         {
@@ -86,154 +86,149 @@ public static class GameOverSetupMenu
         var raycaster = canvasGo.GetComponent<GraphicRaycaster>();
         if (raycaster == null) canvasGo.AddComponent<GraphicRaycaster>();
 
-        // 5. Create Game Over Panel
-        Transform panelTransform = canvasGo.transform.Find("GameOverPanel");
-        GameObject panelGo;
-        if (panelTransform == null)
-        {
-            panelGo = new GameObject("GameOverPanel");
-            panelGo.transform.SetParent(canvasGo.transform, false);
-            Undo.RegisterCreatedObjectUndo(panelGo, "Create GameOverPanel");
-        }
-        else
-        {
-            panelGo = panelTransform.gameObject;
-        }
+        // 5. Build GAME OVER Panel
+        GameObject gameOverPanelGo = CreateOrFindChild(canvasGo, "GameOverPanel");
+        ConfigurePanelRect(gameOverPanelGo, new Color(0.08f, 0.04f, 0.04f, 0.88f));
 
-        var panelRect = panelGo.GetComponent<RectTransform>();
-        if (panelRect == null) panelRect = panelGo.AddComponent<RectTransform>();
-        panelRect.anchorMin = Vector2.zero;
-        panelRect.anchorMax = Vector2.one;
-        panelRect.offsetMin = Vector2.zero;
-        panelRect.offsetMax = Vector2.zero;
+        GameObject gameOverTextGo = CreateOrFindChild(gameOverPanelGo, "GameOverText");
+        ConfigureText(gameOverTextGo, "GAME OVER", 72, FontStyles.Bold, new Color(0.95f, 0.2f, 0.2f, 1f), new Vector2(0f, 90f), new Vector2(800f, 120f));
 
-        var panelImage = panelGo.GetComponent<Image>();
-        if (panelImage == null) panelImage = panelGo.AddComponent<Image>();
-        panelImage.color = new Color(0.05f, 0.05f, 0.08f, 0.85f); // Elegant dark overlay
+        GameObject gameOverScoreGo = CreateOrFindChild(gameOverPanelGo, "FinalScoreText");
+        var gameOverScoreTmp = ConfigureText(gameOverScoreGo, "Final Score: 0", 36, FontStyles.Bold, new Color(1f, 0.88f, 0.2f, 1f), new Vector2(0f, 15f), new Vector2(600f, 60f));
 
-        // 6. Create GAME OVER Text
-        Transform textTransform = panelGo.transform.Find("GameOverText");
-        GameObject textGo;
-        if (textTransform == null)
-        {
-            textGo = new GameObject("GameOverText");
-            textGo.transform.SetParent(panelGo.transform, false);
-            Undo.RegisterCreatedObjectUndo(textGo, "Create GameOverText");
-        }
-        else
-        {
-            textGo = textTransform.gameObject;
-        }
+        GameObject gameOverBtnGo = CreateOrFindChild(gameOverPanelGo, "RestartButton");
+        var gameOverBtn = ConfigureButton(gameOverBtnGo, "Restart", new Vector2(0f, -60f), new Color(0.18f, 0.55f, 0.95f, 1f));
 
-        var textRect = textGo.GetComponent<RectTransform>();
-        if (textRect == null) textRect = textGo.AddComponent<RectTransform>();
-        textRect.anchorMin = new Vector2(0.5f, 0.5f);
-        textRect.anchorMax = new Vector2(0.5f, 0.5f);
-        textRect.pivot = new Vector2(0.5f, 0.5f);
-        textRect.anchoredPosition = new Vector2(0f, 75f);
-        textRect.sizeDelta = new Vector2(800f, 140f);
+        // 6. Build WIN Panel
+        GameObject winPanelGo = CreateOrFindChild(canvasGo, "WinPanel");
+        ConfigurePanelRect(winPanelGo, new Color(0.04f, 0.08f, 0.04f, 0.88f));
 
-        var tmpText = textGo.GetComponent<TextMeshProUGUI>();
-        if (tmpText == null) tmpText = textGo.AddComponent<TextMeshProUGUI>();
-        tmpText.text = "GAME OVER";
-        tmpText.fontSize = 72;
-        tmpText.fontStyle = FontStyles.Bold;
-        tmpText.alignment = TextAlignmentOptions.Center;
-        tmpText.color = new Color(0.95f, 0.2f, 0.2f, 1.0f); // Bold red
+        GameObject winTextGo = CreateOrFindChild(winPanelGo, "WinText");
+        ConfigureText(winTextGo, "WIN", 76, FontStyles.Bold, new Color(0.2f, 0.95f, 0.35f, 1f), new Vector2(0f, 90f), new Vector2(800f, 120f));
 
-        // 7. Create Restart Button
-        Transform buttonTransform = panelGo.transform.Find("RestartButton");
-        GameObject buttonGo;
-        if (buttonTransform == null)
-        {
-            buttonGo = new GameObject("RestartButton");
-            buttonGo.transform.SetParent(panelGo.transform, false);
-            Undo.RegisterCreatedObjectUndo(buttonGo, "Create RestartButton");
-        }
-        else
-        {
-            buttonGo = buttonTransform.gameObject;
-        }
+        GameObject winScoreGo = CreateOrFindChild(winPanelGo, "FinalScoreText");
+        var winScoreTmp = ConfigureText(winScoreGo, "Final Score: 10,000", 36, FontStyles.Bold, new Color(1f, 0.88f, 0.2f, 1f), new Vector2(0f, 15f), new Vector2(600f, 60f));
 
-        var btnRect = buttonGo.GetComponent<RectTransform>();
-        if (btnRect == null) btnRect = buttonGo.AddComponent<RectTransform>();
-        btnRect.anchorMin = new Vector2(0.5f, 0.5f);
-        btnRect.anchorMax = new Vector2(0.5f, 0.5f);
-        btnRect.pivot = new Vector2(0.5f, 0.5f);
-        btnRect.anchoredPosition = new Vector2(0f, -50f);
-        btnRect.sizeDelta = new Vector2(240f, 65f);
+        GameObject winBtnGo = CreateOrFindChild(winPanelGo, "RestartButton");
+        var winBtn = ConfigureButton(winBtnGo, "Restart", new Vector2(0f, -60f), new Color(0.2f, 0.75f, 0.3f, 1f));
 
-        var btnImage = buttonGo.GetComponent<Image>();
-        if (btnImage == null) btnImage = buttonGo.AddComponent<Image>();
-        btnImage.color = new Color(0.18f, 0.55f, 0.95f, 1.0f); // Clean blue button
-
-        var btnComp = buttonGo.GetComponent<Button>();
-        if (btnComp == null) btnComp = buttonGo.AddComponent<Button>();
-        btnComp.targetGraphic = btnImage;
-        var colors = btnComp.colors;
-        colors.highlightedColor = new Color(0.3f, 0.68f, 1.0f, 1.0f);
-        colors.pressedColor = new Color(0.12f, 0.42f, 0.78f, 1.0f);
-        btnComp.colors = colors;
-
-        // Button label
-        Transform btnLabelTransform = buttonGo.transform.Find("Text (TMP)");
-        GameObject btnLabelGo;
-        if (btnLabelTransform == null)
-        {
-            btnLabelGo = new GameObject("Text (TMP)");
-            btnLabelGo.transform.SetParent(buttonGo.transform, false);
-            Undo.RegisterCreatedObjectUndo(btnLabelGo, "Create Button Label");
-        }
-        else
-        {
-            btnLabelGo = btnLabelTransform.gameObject;
-        }
-
-        var btnLabelRect = btnLabelGo.GetComponent<RectTransform>();
-        if (btnLabelRect == null) btnLabelRect = btnLabelGo.AddComponent<RectTransform>();
-        btnLabelRect.anchorMin = Vector2.zero;
-        btnLabelRect.anchorMax = Vector2.one;
-        btnLabelRect.offsetMin = Vector2.zero;
-        btnLabelRect.offsetMax = Vector2.zero;
-
-        var btnTmp = btnLabelGo.GetComponent<TextMeshProUGUI>();
-        if (btnTmp == null) btnTmp = btnLabelGo.AddComponent<TextMeshProUGUI>();
-        btnTmp.text = "Restart";
-        btnTmp.fontSize = 28;
-        btnTmp.fontStyle = FontStyles.Bold;
-        btnTmp.alignment = TextAlignmentOptions.Center;
-        btnTmp.color = Color.white;
-
-        // 8. Attach / Configure GameOverManager on Canvas
+        // 7. Attach & Configure GameOverManager
         var manager = canvasGo.GetComponent<GameOverManager>();
         if (manager == null) manager = Undo.AddComponent<GameOverManager>(canvasGo);
 
-        // Serialize fields via SerializedObject to ensure Inspector references are properly saved
         var serializedMgr = new SerializedObject(manager);
-        serializedMgr.FindProperty("gameOverPanel").objectReferenceValue = panelGo;
-        serializedMgr.FindProperty("restartButton").objectReferenceValue = btnComp;
+        serializedMgr.FindProperty("gameOverPanel").objectReferenceValue = gameOverPanelGo;
+        serializedMgr.FindProperty("winPanel").objectReferenceValue = winPanelGo;
+        serializedMgr.FindProperty("gameOverScoreText").objectReferenceValue = gameOverScoreTmp;
+        serializedMgr.FindProperty("winScoreText").objectReferenceValue = winScoreTmp;
+        serializedMgr.FindProperty("gameOverRestartButton").objectReferenceValue = gameOverBtn;
+        serializedMgr.FindProperty("winRestartButton").objectReferenceValue = winBtn;
         serializedMgr.FindProperty("player").objectReferenceValue = player;
         serializedMgr.FindProperty("playerRigidbody").objectReferenceValue = rb;
         serializedMgr.FindProperty("fallDetector").objectReferenceValue = fallDetector;
         serializedMgr.FindProperty("autoDetectMovementComponents").boolValue = true;
         serializedMgr.FindProperty("manageCursor").boolValue = true;
         serializedMgr.FindProperty("lockCursorOnRestart").boolValue = true;
+        serializedMgr.FindProperty("targetWinScore").intValue = 10000;
         serializedMgr.FindProperty("initialPosition").vector3Value = player.transform.position;
         serializedMgr.FindProperty("initialRotation").quaternionValue = player.transform.rotation;
         serializedMgr.ApplyModifiedProperties();
 
-        // Also connect fallDetector reference to manager
+        // Connect fallDetector reference to manager
         var serializedDetector = new SerializedObject(fallDetector);
         serializedDetector.FindProperty("gameOverManager").objectReferenceValue = manager;
         serializedDetector.FindProperty("initialPosition").vector3Value = player.transform.position;
         serializedDetector.FindProperty("initialRotation").quaternionValue = player.transform.rotation;
         serializedDetector.ApplyModifiedProperties();
 
-        // 9. Hide panel initially
-        panelGo.SetActive(false);
+        // 8. Hide both panels initially
+        gameOverPanelGo.SetActive(false);
+        winPanelGo.SetActive(false);
 
         // Mark scene dirty and save
         EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
-        Debug.Log("[GameOverSetup] Successfully created and wired Game Over & Restart System!");
+        Debug.Log("[GameOverSetup] Successfully created WIN and GAME OVER panels and wired LevelManager!");
+    }
+
+    private static GameObject CreateOrFindChild(GameObject parent, string name)
+    {
+        Transform child = parent.transform.Find(name);
+        if (child != null)
+        {
+            if (child is RectTransform) return child.gameObject;
+            Object.DestroyImmediate(child.gameObject);
+        }
+
+        GameObject go = new GameObject(name, typeof(RectTransform));
+        go.transform.SetParent(parent.transform, false);
+        Undo.RegisterCreatedObjectUndo(go, $"Create {name}");
+        return go;
+    }
+
+    private static void ConfigurePanelRect(GameObject panelGo, Color color)
+    {
+        var panelRect = panelGo.GetComponent<RectTransform>() ?? panelGo.AddComponent<RectTransform>();
+        panelRect.anchorMin = Vector2.zero;
+        panelRect.anchorMax = Vector2.one;
+        panelRect.offsetMin = Vector2.zero;
+        panelRect.offsetMax = Vector2.zero;
+
+        var panelImage = panelGo.GetComponent<Image>() ?? panelGo.AddComponent<Image>();
+        panelImage.color = color;
+    }
+
+    private static TextMeshProUGUI ConfigureText(GameObject go, string text, float fontSize, FontStyles style, Color color, Vector2 pos, Vector2 size)
+    {
+        var rect = go.GetComponent<RectTransform>() ?? go.AddComponent<RectTransform>();
+        rect.anchorMin = new Vector2(0.5f, 0.5f);
+        rect.anchorMax = new Vector2(0.5f, 0.5f);
+        rect.pivot = new Vector2(0.5f, 0.5f);
+        rect.anchoredPosition = pos;
+        rect.sizeDelta = size;
+
+        var tmp = go.GetComponent<TextMeshProUGUI>() ?? go.AddComponent<TextMeshProUGUI>();
+        tmp.text = text;
+        tmp.fontSize = fontSize;
+        tmp.fontStyle = style;
+        tmp.color = color;
+        tmp.alignment = TextAlignmentOptions.Center;
+        return tmp;
+    }
+
+    private static Button ConfigureButton(GameObject btnGo, string label, Vector2 pos, Color baseColor)
+    {
+        var rect = btnGo.GetComponent<RectTransform>() ?? btnGo.AddComponent<RectTransform>();
+        rect.anchorMin = new Vector2(0.5f, 0.5f);
+        rect.anchorMax = new Vector2(0.5f, 0.5f);
+        rect.pivot = new Vector2(0.5f, 0.5f);
+        rect.anchoredPosition = pos;
+        rect.sizeDelta = new Vector2(240f, 65f);
+
+        var img = btnGo.GetComponent<Image>() ?? btnGo.AddComponent<Image>();
+        img.color = baseColor;
+
+        var btn = btnGo.GetComponent<Button>() ?? btnGo.AddComponent<Button>();
+        btn.targetGraphic = img;
+
+        var colors = btn.colors;
+        colors.highlightedColor = baseColor * 1.2f;
+        colors.pressedColor = baseColor * 0.8f;
+        btn.colors = colors;
+
+        GameObject labelGo = CreateOrFindChild(btnGo, "Text (TMP)");
+        var labelRect = labelGo.GetComponent<RectTransform>() ?? labelGo.AddComponent<RectTransform>();
+        labelRect.anchorMin = Vector2.zero;
+        labelRect.anchorMax = Vector2.one;
+        labelRect.offsetMin = Vector2.zero;
+        labelRect.offsetMax = Vector2.zero;
+
+        var labelTmp = labelGo.GetComponent<TextMeshProUGUI>() ?? labelGo.AddComponent<TextMeshProUGUI>();
+        labelTmp.text = label;
+        labelTmp.fontSize = 28;
+        labelTmp.fontStyle = FontStyles.Bold;
+        labelTmp.alignment = TextAlignmentOptions.Center;
+        labelTmp.color = Color.white;
+
+        return btn;
     }
 }

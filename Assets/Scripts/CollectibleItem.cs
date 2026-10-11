@@ -186,6 +186,13 @@ public class CollectibleItem : MonoBehaviour
         // Guard against duplicate trigger events
         if (isCollected) return;
 
+        // Prevent collection if the level has already ended (Won or Lost)
+        var levelMgr = GameOverManager.Instance ?? Object.FindAnyObjectByType<GameOverManager>();
+        if (levelMgr != null && levelMgr.CurrentState != LevelState.Playing)
+        {
+            return;
+        }
+
         if (IsPlayer(other))
         {
             isCollected = true;
