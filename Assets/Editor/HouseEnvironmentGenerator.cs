@@ -133,9 +133,113 @@ public static class HouseEnvironmentGenerator
         // 9. Ensure Environment Lighting & Camera
         EnsureLightingAndCamera(rootGo);
 
+        // 10. Setup Box Colliders (everything collidable except the door)
+        SetupBoxColliders(rootGo);
+
         Selection.activeGameObject = rootGo;
         UnityEditor.EditorUtility.SetDirty(rootGo);
         Debug.Log("<color=green>[HouseEnvironmentGenerator]</color> 3D House Environment with ProBuilder successfully generated!");
+    }
+
+    [MenuItem("Tools/ProBuilder/Add Box Colliders to House Environment", priority = 3)]
+    public static void ApplyBoxCollidersMenu()
+    {
+        int appliedScenes = 0;
+
+        // 1. Apply to active scene instance if present
+        GameObject sceneInstance = GameObject.Find("HouseEnvironment");
+        if (sceneInstance != null)
+        {
+            SetupBoxColliders(sceneInstance);
+            UnityEditor.EditorUtility.SetDirty(sceneInstance);
+            appliedScenes++;
+            Debug.Log("<color=green>[HouseEnvironmentGenerator]</color> Added box colliders to scene instance 'HouseEnvironment'.");
+        }
+
+        // 2. Apply to Prefab asset: Assets/Envi/HouseEnvironment.prefab
+        string prefabPath = "Assets/Envi/HouseEnvironment.prefab";
+        if (File.Exists(prefabPath))
+        {
+            GameObject prefabContents = PrefabUtility.LoadPrefabContents(prefabPath);
+            if (prefabContents != null)
+            {
+                SetupBoxColliders(prefabContents);
+                PrefabUtility.SaveAsPrefabAsset(prefabContents, prefabPath);
+                PrefabUtility.UnloadPrefabContents(prefabContents);
+                AssetDatabase.SaveAssets();
+                Debug.Log("<color=green>[HouseEnvironmentGenerator]</color> Added box colliders to prefab 'Assets/Envi/HouseEnvironment.prefab'.");
+            }
+        }
+    }
+
+    public static void SetupBoxColliders(GameObject root)
+    {
+        if (root == null) return;
+
+        MeshFilter[] meshFilters = root.GetComponentsInChildren<MeshFilter>(true);
+        int addedCount = 0;
+        int clearedDoorCount = 0;
+
+        foreach (var mf in meshFilters)
+        {
+            GameObject go = mf.gameObject;
+            string name = go.name;
+
+            // EXCLUDE THE DOOR: "can't walk through it. except the door"
+            // Door_Panel, Door_Knob, Door_Frame must NOT block the player!
+            if (name == "Door_Panel" || name == "Door_Knob" || name == "Door_Frame" || name == "FrontDoor")
+            {
+                Collider[] cols = go.GetComponents<Collider>();
+                foreach (var c in cols)
+                {
+                    Object.DestroyImmediate(c);
+                    clearedDoorCount++;
+                }
+                continue;
+            }
+
+            // Exclude small flower stems/petals so character movement isn't obstructed by decorative flowers
+            if (name.Contains("Flower_") || name.EndsWith("_Stem") || name.EndsWith("_Petals"))
+            {
+                Collider[] cols = go.GetComponents<Collider>();
+                foreach (var c in cols)
+                {
+                    Object.DestroyImmediate(c);
+                }
+                continue;
+            }
+
+            // Clean up any extra or non-box colliders so there is strictly at most ONE BoxCollider
+            Collider[] existingCols = go.GetComponents<Collider>();
+            BoxCollider keepBox = null;
+            foreach (var c in existingCols)
+            {
+                if (c is BoxCollider b && keepBox == null)
+                {
+                    keepBox = b;
+                }
+                else
+                {
+                    Object.DestroyImmediate(c);
+                }
+            }
+
+            // Add or configure BoxCollider
+            if (keepBox == null)
+            {
+                keepBox = go.AddComponent<BoxCollider>();
+                addedCount++;
+            }
+
+            if (mf.sharedMesh != null)
+            {
+                keepBox.center = mf.sharedMesh.bounds.center;
+                keepBox.size = mf.sharedMesh.bounds.size;
+            }
+            keepBox.isTrigger = false;
+        }
+
+        Debug.Log($"<color=green>[HouseEnvironmentGenerator]</color> BoxColliders setup completed: {addedCount} colliders configured, {clearedDoorCount} door colliders cleared.");
     }
 
     [MenuItem("Tools/ProBuilder/Clear House Environment", priority = 2)]
