@@ -1,5 +1,6 @@
 using TMPro;
 using UnityEditor;
+using UnityEditor.Events;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -7,8 +8,34 @@ using UnityEngine.UI;
 
 public static class GameOverSetupMenu
 {
+    private const string PlaygroundScenePath = "Assets/Starter Assets/Sample/ThirdPersonController/Playground.unity";
+    private const string Playground2ScenePath = "Assets/Starter Assets/Sample/ThirdPersonController/Playground 2.unity";
+
+    [MenuItem("Tools/Setup Game Over System in Both Scenes")]
+    public static void SetupBothPlaygroundScenes()
+    {
+        SetupScene(PlaygroundScenePath);
+        SetupScene(Playground2ScenePath);
+
+        // Reopen Playground
+        EditorSceneManager.OpenScene(PlaygroundScenePath, OpenSceneMode.Single);
+        Debug.Log("<color=green>[GameOverSetup] Successfully updated Game Over screen with Restart and Main Menu buttons in both Playground and Playground 2!</color>");
+    }
+
     [MenuItem("Tools/Setup Game Over System")]
-    public static void SetupGameOverSystem()
+    public static void SetupActiveScene()
+    {
+        SetupCurrentScene();
+    }
+
+    private static void SetupScene(string scenePath)
+    {
+        var scene = EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Single);
+        SetupCurrentScene();
+        EditorSceneManager.SaveScene(scene);
+    }
+
+    public static void SetupCurrentScene()
     {
         // 1. Locate Player
         GameObject player = GameObject.FindGameObjectWithTag("Player");
@@ -55,7 +82,7 @@ public static class GameOverSetupMenu
         var eventSystem = Object.FindAnyObjectByType<EventSystem>();
         if (eventSystem == null)
         {
-            var eventSystemGo = new GameObject("EventSystem", typeof(EventSystem));
+            var eventSystemGo = new GameObject("UI_EventSystem", typeof(EventSystem));
 #if ENABLE_INPUT_SYSTEM
             eventSystemGo.AddComponent<UnityEngine.InputSystem.UI.InputSystemUIInputModule>();
 #else
@@ -68,36 +95,37 @@ public static class GameOverSetupMenu
         GameObject canvasGo = GameObject.Find("GameOverCanvas");
         if (canvasGo == null)
         {
-            canvasGo = new GameObject("GameOverCanvas");
+            canvasGo = new GameObject("GameOverCanvas", typeof(RectTransform));
             Undo.RegisterCreatedObjectUndo(canvasGo, "Create GameOverCanvas");
         }
 
-        var canvas = canvasGo.GetComponent<Canvas>();
-        if (canvas == null) canvas = canvasGo.AddComponent<Canvas>();
+        var canvas = canvasGo.GetComponent<Canvas>() ?? canvasGo.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         canvas.sortingOrder = 100;
 
-        var scaler = canvasGo.GetComponent<CanvasScaler>();
-        if (scaler == null) scaler = canvasGo.AddComponent<CanvasScaler>();
+        var scaler = canvasGo.GetComponent<CanvasScaler>() ?? canvasGo.AddComponent<CanvasScaler>();
         scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
         scaler.referenceResolution = new Vector2(1920f, 1080f);
         scaler.matchWidthOrHeight = 0.5f;
 
-        var raycaster = canvasGo.GetComponent<GraphicRaycaster>();
-        if (raycaster == null) canvasGo.AddComponent<GraphicRaycaster>();
+        var raycaster = canvasGo.GetComponent<GraphicRaycaster>() ?? canvasGo.AddComponent<GraphicRaycaster>();
 
         // 5. Build GAME OVER Panel
         GameObject gameOverPanelGo = CreateOrFindChild(canvasGo, "GameOverPanel");
         ConfigurePanelRect(gameOverPanelGo, new Color(0.08f, 0.04f, 0.04f, 0.88f));
 
         GameObject gameOverTextGo = CreateOrFindChild(gameOverPanelGo, "GameOverText");
-        ConfigureText(gameOverTextGo, "GAME OVER", 72, FontStyles.Bold, new Color(0.95f, 0.2f, 0.2f, 1f), new Vector2(0f, 90f), new Vector2(800f, 120f));
+        ConfigureText(gameOverTextGo, "GAME OVER", 72, FontStyles.Bold, new Color(0.95f, 0.2f, 0.2f, 1f), new Vector2(0f, 100f), new Vector2(800f, 120f));
 
         GameObject gameOverScoreGo = CreateOrFindChild(gameOverPanelGo, "FinalScoreText");
-        var gameOverScoreTmp = ConfigureText(gameOverScoreGo, "Final Score: 0", 36, FontStyles.Bold, new Color(1f, 0.88f, 0.2f, 1f), new Vector2(0f, 15f), new Vector2(600f, 60f));
+        var gameOverScoreTmp = ConfigureText(gameOverScoreGo, "Final Score: 0", 36, FontStyles.Bold, new Color(1f, 0.88f, 0.2f, 1f), new Vector2(0f, 25f), new Vector2(600f, 60f));
 
+        // Two buttons beneath GAME OVER text: Restart and Main Menu
         GameObject gameOverBtnGo = CreateOrFindChild(gameOverPanelGo, "RestartButton");
-        var gameOverBtn = ConfigureButton(gameOverBtnGo, "Restart", new Vector2(0f, -60f), new Color(0.18f, 0.55f, 0.95f, 1f));
+        var gameOverBtn = ConfigureButton(gameOverBtnGo, "Restart", new Vector2(0f, -45f), new Vector2(280f, 60f), new Color(0.18f, 0.55f, 0.95f, 1f));
+
+        GameObject gameOverMainMenuBtnGo = CreateOrFindChild(gameOverPanelGo, "MainMenuButton");
+        var gameOverMainMenuBtn = ConfigureButton(gameOverMainMenuBtnGo, "Main Menu", new Vector2(0f, -120f), new Vector2(280f, 60f), new Color(0.32f, 0.35f, 0.48f, 1f));
 
         // 6. Build WIN Panel
         GameObject winPanelGo = CreateOrFindChild(canvasGo, "WinPanel");
@@ -110,11 +138,10 @@ public static class GameOverSetupMenu
         var winScoreTmp = ConfigureText(winScoreGo, "Final Score: 10,000", 36, FontStyles.Bold, new Color(1f, 0.88f, 0.2f, 1f), new Vector2(0f, 15f), new Vector2(600f, 60f));
 
         GameObject winBtnGo = CreateOrFindChild(winPanelGo, "RestartButton");
-        var winBtn = ConfigureButton(winBtnGo, "Restart", new Vector2(0f, -60f), new Color(0.2f, 0.75f, 0.3f, 1f));
+        var winBtn = ConfigureButton(winBtnGo, "Restart", new Vector2(0f, -60f), new Vector2(240f, 65f), new Color(0.2f, 0.75f, 0.3f, 1f));
 
         // 7. Attach & Configure GameOverManager
-        var manager = canvasGo.GetComponent<GameOverManager>();
-        if (manager == null) manager = Undo.AddComponent<GameOverManager>(canvasGo);
+        var manager = canvasGo.GetComponent<GameOverManager>() ?? Undo.AddComponent<GameOverManager>(canvasGo);
 
         var serializedMgr = new SerializedObject(manager);
         serializedMgr.FindProperty("gameOverPanel").objectReferenceValue = gameOverPanelGo;
@@ -122,6 +149,7 @@ public static class GameOverSetupMenu
         serializedMgr.FindProperty("gameOverScoreText").objectReferenceValue = gameOverScoreTmp;
         serializedMgr.FindProperty("winScoreText").objectReferenceValue = winScoreTmp;
         serializedMgr.FindProperty("gameOverRestartButton").objectReferenceValue = gameOverBtn;
+        serializedMgr.FindProperty("gameOverMainMenuButton").objectReferenceValue = gameOverMainMenuBtn;
         serializedMgr.FindProperty("winRestartButton").objectReferenceValue = winBtn;
         serializedMgr.FindProperty("player").objectReferenceValue = player;
         serializedMgr.FindProperty("playerRigidbody").objectReferenceValue = rb;
@@ -141,13 +169,17 @@ public static class GameOverSetupMenu
         serializedDetector.FindProperty("initialRotation").quaternionValue = player.transform.rotation;
         serializedDetector.ApplyModifiedProperties();
 
+        // Hook up persistent OnClick listeners in Inspector
+        UnityEventTools.AddPersistentListener(gameOverBtn.onClick, manager.RestartGame);
+        UnityEventTools.AddPersistentListener(gameOverMainMenuBtn.onClick, manager.ReturnToMainMenu);
+        UnityEventTools.AddPersistentListener(winBtn.onClick, manager.RestartGame);
+
         // 8. Hide both panels initially
         gameOverPanelGo.SetActive(false);
         winPanelGo.SetActive(false);
 
-        // Mark scene dirty and save
+        // Mark scene dirty
         EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
-        Debug.Log("[GameOverSetup] Successfully created WIN and GAME OVER panels and wired LevelManager!");
     }
 
     private static GameObject CreateOrFindChild(GameObject parent, string name)
@@ -195,24 +227,30 @@ public static class GameOverSetupMenu
         return tmp;
     }
 
-    private static Button ConfigureButton(GameObject btnGo, string label, Vector2 pos, Color baseColor)
+    private static Button ConfigureButton(GameObject btnGo, string label, Vector2 pos, Vector2 size, Color baseColor)
     {
         var rect = btnGo.GetComponent<RectTransform>() ?? btnGo.AddComponent<RectTransform>();
         rect.anchorMin = new Vector2(0.5f, 0.5f);
         rect.anchorMax = new Vector2(0.5f, 0.5f);
         rect.pivot = new Vector2(0.5f, 0.5f);
         rect.anchoredPosition = pos;
-        rect.sizeDelta = new Vector2(240f, 65f);
+        rect.sizeDelta = size;
 
         var img = btnGo.GetComponent<Image>() ?? btnGo.AddComponent<Image>();
         img.color = baseColor;
+
+        var outline = btnGo.GetComponent<Outline>() ?? btnGo.AddComponent<Outline>();
+        outline.effectColor = new Color(1f, 1f, 1f, 0.2f);
+        outline.effectDistance = new Vector2(1.5f, -1.5f);
 
         var btn = btnGo.GetComponent<Button>() ?? btnGo.AddComponent<Button>();
         btn.targetGraphic = img;
 
         var colors = btn.colors;
-        colors.highlightedColor = baseColor * 1.2f;
-        colors.pressedColor = baseColor * 0.8f;
+        colors.normalColor = baseColor;
+        colors.highlightedColor = baseColor * 1.25f;
+        colors.pressedColor = baseColor * 0.75f;
+        colors.selectedColor = baseColor * 1.25f;
         btn.colors = colors;
 
         GameObject labelGo = CreateOrFindChild(btnGo, "Text (TMP)");

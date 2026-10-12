@@ -66,14 +66,29 @@ namespace StarterAssets
 			sprint = newSprintState;
 		}
 		
-		private void OnApplicationFocus(bool hasFocus)
+		private void Start()
 		{
 			SetCursorState(cursorLocked);
 		}
 
-		private void SetCursorState(bool newState)
+		private void OnEnable()
 		{
+			SetCursorState(cursorLocked);
+		}
+
+		private void OnApplicationFocus(bool hasFocus)
+		{
+			if (hasFocus)
+			{
+				SetCursorState(cursorLocked);
+			}
+		}
+
+		public void SetCursorState(bool newState)
+		{
+			cursorLocked = newState;
 			Cursor.lockState = newState ? CursorLockMode.Locked : CursorLockMode.None;
+			Cursor.visible = !newState;
 		}
 	}
 	

@@ -52,6 +52,10 @@ public class CollectibleItem : MonoBehaviour
     [Tooltip("Bobbing amplitude (height in meters).")]
     [SerializeField] private float bobAmplitude = 0.08f;
 
+    [Header("Interaction Settings")]
+    [Tooltip("If true, requires pressing the interaction key (E) within range instead of automatic collection on touch.")]
+    [SerializeField] private bool requireInteraction = false;
+
     // Internal state
     private bool isCollected = false;
     private Collider itemCollider;
@@ -87,6 +91,12 @@ public class CollectibleItem : MonoBehaviour
     {
         get => collectedEffect;
         set => collectedEffect = value;
+    }
+
+    public bool RequireInteraction
+    {
+        get => requireInteraction;
+        set => requireInteraction = value;
     }
 
     public bool IsCollected => isCollected;
@@ -186,6 +196,12 @@ public class CollectibleItem : MonoBehaviour
         // Guard against duplicate trigger events
         if (isCollected) return;
 
+        // If manual interaction is required (e.g., Stage 2 E-key collection), do not auto-collect on touch
+        if (requireInteraction || PlayerItemInteractor.IsManualInteractionActive)
+        {
+            return;
+        }
+
         // Prevent collection if the level has already ended (Won or Lost)
         var levelMgr = GameOverManager.Instance ?? Object.FindAnyObjectByType<GameOverManager>();
         if (levelMgr != null && levelMgr.CurrentState != LevelState.Playing)
@@ -198,6 +214,25 @@ public class CollectibleItem : MonoBehaviour
             isCollected = true;
             Collect();
         }
+    }
+
+    /// <summary>
+    /// Attempts to collect this item via explicit player interaction (pressing E in Stage 2).
+    /// Returns true if the item was eligible and successfully collected.
+    /// </summary>
+    public bool TryCollectByInteraction()
+    {
+        if (isCollected) return false;
+
+        var levelMgr = GameOverManager.Instance ?? Object.FindAnyObjectByType<GameOverManager>();
+        if (levelMgr != null && levelMgr.CurrentState != LevelState.Playing)
+        {
+            return false;
+        }
+
+        isCollected = true;
+        Collect();
+        return true;
     }
 
     /// <summary>
@@ -236,6 +271,13 @@ public class CollectibleItem : MonoBehaviour
 
         // Apply effect based on type and value
         ApplyEffect();
+
+        // Play item collection SFX ("Collect star 5") once per successful collection
+        var audioMgr = AudioManager.Instance ?? Object.FindAnyObjectByType<AudioManager>();
+        if (audioMgr != null)
+        {
+            audioMgr.PlayCollectItemSfx();
+        }
 
         // Spawn optional collection feedback effect
         if (collectedEffect != null)

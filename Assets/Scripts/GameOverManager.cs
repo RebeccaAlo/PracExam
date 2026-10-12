@@ -49,8 +49,14 @@ public class GameOverManager : MonoBehaviour
     [Tooltip("Restart button on the Game Over panel.")]
     [SerializeField] private Button gameOverRestartButton;
 
+    [Tooltip("Main Menu button on the Game Over panel.")]
+    [SerializeField] private Button gameOverMainMenuButton;
+
     [Tooltip("Restart button on the Win panel.")]
     [SerializeField] private Button winRestartButton;
+
+    [Tooltip("Main Menu button on the Win panel.")]
+    [SerializeField] private Button winMainMenuButton;
 
     [Header("Player Target")]
     [Tooltip("The player GameObject. If unassigned, automatically finds object tagged 'Player'.")]
@@ -100,6 +106,8 @@ public class GameOverManager : MonoBehaviour
     public TMP_Text WinScoreText => winScoreText;
     public Button GameOverRestartButton => gameOverRestartButton;
     public Button WinRestartButton => winRestartButton;
+    public Button GameOverMainMenuButton => gameOverMainMenuButton;
+    public Button WinMainMenuButton => winMainMenuButton;
 
     private void Awake()
     {
@@ -113,6 +121,11 @@ public class GameOverManager : MonoBehaviour
         InitializePlayerReferences();
         CacheInitialState();
         SetupUI();
+
+        if (manageCursor && currentState == LevelState.Playing)
+        {
+            ApplyGameplayCursorState(true);
+        }
     }
 
     private void OnDestroy()
@@ -128,8 +141,7 @@ public class GameOverManager : MonoBehaviour
     /// </summary>
     public void ReturnToMainMenu()
     {
-        Cursor.lockState = CursorLockMode.None;
-        Cursor.visible = true;
+        ApplyGameplayCursorState(false);
         Time.timeScale = 1f;
         UnityEngine.SceneManagement.SceneManager.LoadScene("MainMenu");
     }
@@ -139,8 +151,7 @@ public class GameOverManager : MonoBehaviour
     /// </summary>
     public void ReturnToStageSelection()
     {
-        Cursor.lockState = CursorLockMode.None;
-        Cursor.visible = true;
+        ApplyGameplayCursorState(false);
         Time.timeScale = 1f;
         UnityEngine.SceneManagement.SceneManager.LoadScene("StageSelection");
     }
@@ -151,6 +162,57 @@ public class GameOverManager : MonoBehaviour
         {
             initialPosition = player.transform.position;
             initialRotation = player.transform.rotation;
+        }
+
+        if (manageCursor)
+        {
+            ApplyGameplayCursorState(currentState == LevelState.Playing);
+        }
+    }
+
+    private void Update()
+    {
+        if (!manageCursor) return;
+
+        if (currentState == LevelState.Playing)
+        {
+            if (Cursor.lockState != CursorLockMode.Locked || Cursor.visible)
+            {
+                Cursor.lockState = CursorLockMode.Locked;
+                Cursor.visible = false;
+            }
+        }
+        else
+        {
+            if (Cursor.lockState != CursorLockMode.None || !Cursor.visible)
+            {
+                Cursor.lockState = CursorLockMode.None;
+                Cursor.visible = true;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Locks and hides the cursor for active gameplay (enabling mouse camera look),
+    /// or unlocks and shows the cursor for UI interaction (Win, Game Over, Main Menu).
+    /// </summary>
+    public void ApplyGameplayCursorState(bool lockAndHide)
+    {
+        Cursor.lockState = lockAndHide ? CursorLockMode.Locked : CursorLockMode.None;
+        Cursor.visible = !lockAndHide;
+
+        if (player != null)
+        {
+            var inputsComp = player.GetComponent("StarterAssetsInputs");
+            if (inputsComp != null)
+            {
+                SetReflectedField(inputsComp, "cursorLocked", lockAndHide);
+                SetReflectedField(inputsComp, "cursorInputForLook", lockAndHide);
+                if (!lockAndHide)
+                {
+                    SetReflectedField(inputsComp, "look", Vector2.zero);
+                }
+            }
         }
     }
 
@@ -245,6 +307,19 @@ public class GameOverManager : MonoBehaviour
             winRestartButton.onClick.RemoveListener(RestartGame);
             winRestartButton.onClick.AddListener(RestartGame);
         }
+
+        // Hook up Main Menu buttons
+        if (gameOverMainMenuButton != null)
+        {
+            gameOverMainMenuButton.onClick.RemoveListener(ReturnToMainMenu);
+            gameOverMainMenuButton.onClick.AddListener(ReturnToMainMenu);
+        }
+
+        if (winMainMenuButton != null)
+        {
+            winMainMenuButton.onClick.RemoveListener(ReturnToMainMenu);
+            winMainMenuButton.onClick.AddListener(ReturnToMainMenu);
+        }
     }
 
     /// <summary>
@@ -277,6 +352,13 @@ public class GameOverManager : MonoBehaviour
 
         Debug.Log("[GameOverManager] WIN state triggered!");
 
+        // Play Win SFX ("Win sound 5") once per round
+        var audioMgr = AudioManager.Instance ?? Object.FindAnyObjectByType<AudioManager>();
+        if (audioMgr != null)
+        {
+            audioMgr.PlayWinSfx();
+        }
+
         // 1. Stop timer
         var timer = GameTimer.Instance ?? Object.FindAnyObjectByType<GameTimer>();
         if (timer != null)
@@ -298,8 +380,7 @@ public class GameOverManager : MonoBehaviour
         // 4. Unlock cursor for UI
         if (manageCursor)
         {
-            Cursor.lockState = CursorLockMode.None;
-            Cursor.visible = true;
+            ApplyGameplayCursorState(false);
         }
 
         // 5. Freeze Rigidbody
@@ -311,6 +392,11 @@ public class GameOverManager : MonoBehaviour
 
         // 6. Disable movement and input
         SetPlayerMovementEnabled(false);
+
+        if (PlayerItemInteractor.Instance != null)
+        {
+            PlayerItemInteractor.Instance.RefreshTargetAndPrompt();
+        }
     }
 
     /// <summary>
@@ -323,6 +409,13 @@ public class GameOverManager : MonoBehaviour
         currentState = LevelState.Lost;
 
         Debug.Log("[GameOverManager] GAME OVER state triggered!");
+
+        // Play Game Over SFX ("Game Over 2") once per round
+        var audioMgr = AudioManager.Instance ?? Object.FindAnyObjectByType<AudioManager>();
+        if (audioMgr != null)
+        {
+            audioMgr.PlayGameOverSfx();
+        }
 
         // 1. Stop timer
         var timer = GameTimer.Instance ?? Object.FindAnyObjectByType<GameTimer>();
@@ -345,8 +438,7 @@ public class GameOverManager : MonoBehaviour
         // 4. Unlock cursor for UI
         if (manageCursor)
         {
-            Cursor.lockState = CursorLockMode.None;
-            Cursor.visible = true;
+            ApplyGameplayCursorState(false);
         }
 
         // 5. Freeze Rigidbody
@@ -358,14 +450,34 @@ public class GameOverManager : MonoBehaviour
 
         // 6. Disable movement and input
         SetPlayerMovementEnabled(false);
+
+        if (PlayerItemInteractor.Instance != null)
+        {
+            PlayerItemInteractor.Instance.RefreshTargetAndPrompt();
+        }
     }
 
     /// <summary>
-    /// Restarts the level: resets physics, teleports player, resets timer and score, and returns to Playing state.
+    /// Restarts the level by reloading the current active gameplay scene.
+    /// Ensures player, score, timer, and game state reset correctly from the beginning.
     /// </summary>
     public void RestartGame()
     {
-        Debug.Log("[GameOverManager] Restarting level...");
+        Debug.Log("[GameOverManager] Reloading current scene: " + UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
+        Time.timeScale = 1f;
+        if (manageCursor && lockCursorOnRestart)
+        {
+            ApplyGameplayCursorState(true);
+        }
+        UnityEngine.SceneManagement.SceneManager.LoadScene(UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
+    }
+
+    /// <summary>
+    /// In-place level reset: resets physics, teleports player, resets timer and score without reloading scene.
+    /// </summary>
+    public void ResetLevelInPlace()
+    {
+        Debug.Log("[GameOverManager] Resetting level in-place...");
 
         // 1. Reset Rigidbody physics before restoring movement
         ResetRigidbodyPhysics();
@@ -382,8 +494,7 @@ public class GameOverManager : MonoBehaviour
         // 5. Restore cursor locking if configured
         if (manageCursor && lockCursorOnRestart)
         {
-            Cursor.lockState = CursorLockMode.Locked;
-            Cursor.visible = false;
+            ApplyGameplayCursorState(true);
         }
 
         // 6. Reset fall detector state with fresh grace period
